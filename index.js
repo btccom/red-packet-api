@@ -42,13 +42,29 @@ async function getUTXO(address) {
     }
 }
 
+async function broadcastTX(rawhex) {
+    if (bch_network === 'testnet') {
+        const url = 'https://tbcc.blockdozer.com/insight-api/tx/send'
+        const send = await axios.post(url, { rawtx: rawhex })
+        if (send.statusCode === 200) {
+            logger.info('broadcastTX succeed, rawhex:' + rawhex);
+        } else {
+            logger.error('broadcastTX failure, rawhex:' + rawhex);
+        }
+    } else {
+        const url = config.default.btccom_api_endpoint + 'tools/tx-publish'
+        const send = await axios.post(url, { rawhex: rawhex })
+        console.log(send.data);
+    }
+}
+
 function getURL(address) {
     if (bch_network === 'bitcoin' && API === 'btc.com') {
-        return 'https://bch-chain.api.btc.com/v3/address/' + address + '/unspent';
+        return config.default.btccom_api_endpoint + 'address/' + address + '/unspent';
     } else if (bch_network === 'testnet') {
-        return 'https://api.blocktrail.com/v1/tbcc/address/' + address + '/unspent-outputs?api_key=' + config.default.blocktrail_key;
+        return config.default.blocktrail_testnet_endpoint + '/address/' + address + '/unspent-outputs?api_key=' + config.default.blocktrail_key;
     } else {
-        return 'https://api.blocktrail.com/v1/tbcc/address/' + address + '/unspent-outputs?api_key=' + config.default.blocktrail_key;
+        return config.default.blocktrail_endpoint + '/address/' + address + '/unspent-outputs?api_key=' + config.default.blocktrail_key;
     }
 }
 
@@ -82,7 +98,6 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
-        console.log(e);
         reply.send(output(1, 'private-key format err', null))
         return
     }
@@ -96,7 +111,7 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
             }
         }
     } catch (e) {
-        logger.error(e);
+        logger.error('receive address:' + address + ',err:' + e.message);
         reply.send(output(1, 'get amount err', null))
         return
     }
@@ -134,15 +149,17 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
                 var tx = txb.build()
                 var hex = tx.toHex()
                 var txhash = tx.getId()
+                logger.info('tx:' + txhash + ',rawhex:' + hex)
                 console.log(tx.getId())
                 console.log(hex)
-                    // 广播
-                reply.send({ address: address, txhash: txhash })
+                await broadcastTX(hex);
+                // 广播
+                reply.send({ address: address, txhash: txhash, rawhex: hex })
                 sendBearychat((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
             }
         }
     } catch (e) {
-        console.log(e)
+        logger.error('gen tx:' + address + ',err:' + e.message);
         reply.send({
             err_no: 1,
             err_msg: 'send error'
