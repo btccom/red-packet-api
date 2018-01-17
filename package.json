@@ -1,0 +1,21 @@
+{
+  "name": "redpacket",
+  "version": "1.0.0",
+  "description": "btc.com",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "btc.com",
+    "redpacket"
+  ],
+  "author": "dubuqingfeng",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "axios": "^0.17.1",
+    "bearychat": "^1.2.0",
+    "bitcoinforksjs-lib": "git+https://github.com/bitcoinjs/bitcoinjs-lib.git#opt-in-bitcoincash-sighash",
+    "fastify": "^0.39.1"
+  }
+}

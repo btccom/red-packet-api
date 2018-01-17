@@ -1,0 +1,14 @@
+# at https://docs.docker.com/compose/compose-file/
+version: '3.3'
+
+services:
+  web:
+    container_name: red-packet-api
+    image: registry.cn-beijing.aliyuncs.com/btc-com/pushtx:red-packet
+    restart: always
+    # volumes:
+    #   - ./logs:/app/logs
+    ports:
+      - "11111:3000"
+    # environment:
+    #   : ""
