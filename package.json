@@ -16,6 +16,7 @@
     "axios": "^0.17.1",
     "bearychat": "^1.2.0",
     "bitcoinforksjs-lib": "git+https://github.com/bitcoinjs/bitcoinjs-lib.git#opt-in-bitcoincash-sighash",
-    "fastify": "^0.39.1"
+    "fastify": "^0.39.1",
+    "winston": "^3.0.0-rc1"
   }
 }

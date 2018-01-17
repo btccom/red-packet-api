@@ -6,9 +6,10 @@ services:
     container_name: red-packet-api
     image: registry.cn-beijing.aliyuncs.com/btc-com/pushtx:red-packet
     restart: always
-    # volumes:
-    #   - ./logs:/app/logs
+    volumes:
+      - ./logs:/work/app/logs
     ports:
       - "11111:3000"
-    # environment:
-    #   : ""
+    environment:
+      BCH_NETWORK : "testnet"
+      API: "btc.com"

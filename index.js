@@ -3,8 +3,22 @@ const fastify = require('fastify')({
 })
 const axios = require('axios')
 const config = require('./config')
-const bearychat = require('bearychat');
+const bearychat = require('bearychat')
+const winston = require('winston')
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'logs/combined.log' })
+    ]
+});
 
+if (process.env.NODE_ENV !== 'production') {
+    logger.add(new winston.transports.Console({
+        format: winston.format.simple()
+    }));
+}
 var bitcoin = require('bitcoinforksjs-lib')
 var network = bitcoin.networks['testnet']
 var TransactionBuilder = bitcoin.TransactionBuilder
@@ -67,7 +81,6 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
     try {
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
-        console.log(address);
     } catch (e) {
         console.log(e);
         reply.send(output(1, 'private-key format err', null))
@@ -83,7 +96,7 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
             }
         }
     } catch (e) {
-        console.log(e);
+        logger.error(e);
         reply.send(output(1, 'get amount err', null))
         return
     }
