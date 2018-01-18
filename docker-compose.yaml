@@ -1,6 +1,5 @@
 # at https://docs.docker.com/compose/compose-file/
 version: '3.3'
-
 services:
   web:
     container_name: red-packet-api
@@ -11,5 +10,8 @@ services:
     ports:
       - "11111:3000"
     environment:
-      BCH_NETWORK : "testnet"
+      # BCH_NETWORK : "testnet"
+      BCH_NETWORK : "bitcoin"
       API: "btc.com"
+      NODE_ENV: "production"
+      # API: "blocktrail"

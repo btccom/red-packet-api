@@ -4,6 +4,7 @@ const fastify = require('fastify')({
 const cors = require('cors')
 fastify.use(cors())
 const axios = require('axios')
+const trans = require('./trans')
 const config = require('./config')
 const bearychat = require('bearychat')
 const winston = require('winston')
@@ -12,6 +13,7 @@ const logger = winston.createLogger({
     format: winston.format.json(),
     transports: [
         new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'logs/tx.log', level: 'warn' }),
         new winston.transports.File({ filename: 'logs/combined.log' })
     ]
 });
@@ -26,36 +28,47 @@ var bchaddr = require('bchaddrjs');
 var TransactionBuilder = bitcoin.TransactionBuilder
 var Transaction = bitcoin.Transaction
 
-const bch_network = process.env.BCH_NETWORK || 'testnet';
-const API = process.env.API || 'btc.com';
+const bch_network = process.env.BCH_NETWORK || 'bitcoin';
+const API = process.env.API || (bch_network === 'testnet' ? 'blocktrail' : 'btc.com');
 var network = bch_network === 'testnet' ? bitcoin.networks['testnet'] : bitcoin.networks['bitcoin']
 
 async function getUTXO(address) {
     const chain = await axios(getURL(address));
     const json = chain.data;
     console.log(json);
-    // if (json.err_no === 0 && json.data.count() > 0) {
-    if (json.data.length > 0) {
-        return {
-            txhash: json.data[0].hash,
-            value: json.data[0].value
+    if (API === 'btc.com') {
+        if (json.err_no === 0 && json.data.total_count > 0) {
+            return {
+                txhash: json.data.list[0].tx_hash,
+                value: json.data.list[0].value
+            }
+        } else {
+            return false;
         }
     } else {
-        return false;
+        if (json.data.length > 0) {
+            return {
+                txhash: json.data[0].hash,
+                value: json.data[0].value
+            }
+        } else {
+            return false;
+        }
     }
+    // if (json.err_no === 0 && json.data.count() > 0) {
 }
 
 async function broadcastTX(rawhex) {
     if (bch_network === 'testnet') {
         const url = 'https://tbcc.blockdozer.com/insight-api/tx/send'
         const send = await axios.post(url, { rawtx: rawhex })
-        if (send.statusCode === 200) {
+        if (send.data.txid) {
             logger.info('broadcastTX succeed, rawhex:' + rawhex);
         } else {
-            logger.error('broadcastTX failure, rawhex:' + rawhex);
+            logger.error('send.statusCode:' + send.statusCode + 'broadcastTX failure, rawhex:' + rawhex);
         }
     } else {
-        const url = config.default.btccom_api_endpoint + 'tools/tx-publish'
+        const url = config.default.btccom_api_endpoint + '/tools/tx-publish'
         const send = await axios.post(url, { rawhex: rawhex })
         console.log(send.data);
         if (send.data.err_no === 0) {
@@ -68,7 +81,7 @@ async function broadcastTX(rawhex) {
 
 function getURL(address) {
     if (bch_network === 'bitcoin' && API === 'btc.com') {
-        return config.default.btccom_api_endpoint + 'address/' + address + '/unspent';
+        return config.default.btccom_api_endpoint + '/address/' + address + '/unspent';
     } else if (bch_network === 'testnet') {
         return config.default.blocktrail_testnet_endpoint + '/address/' + address + '/unspent-outputs?api_key=' + config.default.blocktrail_key;
     } else {
@@ -96,9 +109,10 @@ function sendBearychat(str) {
 
 fastify.post('/api/' + config.default.route_url + '/amount', async function(request, reply) {
     const private_key = request.body.private_key.trim() || '';
+    const lang = 'cn';
     // verify private key
     if (private_key === '') {
-        reply.send(output(1, 'private key err', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_private_key_error'), null))
         return
     }
     var address = '';
@@ -106,21 +120,22 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
-        reply.send(output(1, 'private-key format err', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_private_key_format_error'), null))
         return
     }
     try {
         if (address !== '') {
             const data = await getUTXO(address);
+            console.log(data);
             if (!data) {
                 reply.send(output(0, null, { address: address, amount: 0 }))
             } else {
-                reply.send(output(0, null, { address: address, amount: data.value }))
+                reply.send(output(0, null, { address: address, amount: (data.value / 100000000) }))
             }
         }
     } catch (e) {
         logger.error('receive address:' + address + ',err:' + e.message);
-        reply.send(output(1, 'get amount err', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_get_amount_error'), null))
         return
     }
 })
@@ -129,14 +144,15 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
     const private_key = request.body.private_key.trim() || '';
     var toLegacyAddress = bchaddr.toLegacyAddress;
     var send_address = '';
+    const lang = 'cn';
     try {
         send_address = toLegacyAddress(request.body.send_address.trim()) || '';
     } catch (e) {
-        reply.send(output(1, 'bitcoin cash address format error', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_address_error'), null))
     }
     // verify private key
     if (private_key === '') {
-        reply.send(output(1, 'error', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_private_key_error'), null))
         return
     }
     var address = '';
@@ -144,21 +160,21 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
-        reply.send(output(1, 'private-key format err', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_private_key_format_error'), null))
         return
     }
     try {
         if (address === send_address) {
-            reply.send(output(1, 'The address is same', null))
+            reply.send(output(1, trans.getValue(lang, 'errors_address_same'), null))
             return
         }
         if (address !== '' && send_address !== '') {
             const data = await getUTXO(address);
             if (!data) {
-                reply.send(output(1, 'The balance is not enough', null))
+                reply.send(output(1, trans.getValue(lang, 'errors_amount_not_enough'), null))
             } else {
                 var vout = 0
-                const fee = 100000
+                const fee = 300
                 const pk = keyPair.getPublicKeyBuffer()
                 const pkh = bitcoin.crypto.hash160(pk)
                 const spk = bitcoin.script.pubKeyHash.output.encode(pkh)
@@ -175,16 +191,17 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
                 logger.info('tx:' + txhash + ',rawhex:' + hex)
                 console.log(tx.getId())
                 console.log(hex)
-                await broadcastTX(hex);
+                await broadcastTX(hex, txhash);
+                logger.warn('address:' + send_address + ',tx:' + txhash + ', hex:' + hex);
                 reply.send(output(0, null, { address: address, txhash: txhash, rawhex: hex }))
                 sendBearychat((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
             }
         } else {
-            reply.send(output(1, 'send address null', null))
+            reply.send(output(1, trans.getValue(lang, 'errors_send_address_null'), null))
         }
     } catch (e) {
         logger.error('gen tx:' + address + ',err:' + e.message);
-        reply.send(output(1, 'send err', null))
+        reply.send(output(1, trans.getValue(lang, 'errors_create_tx_fail'), null))
         return
     }
 })
