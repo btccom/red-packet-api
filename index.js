@@ -1,6 +1,8 @@
 const fastify = require('fastify')({
     logger: true
 })
+const cors = require('cors')
+fastify.use(cors())
 const axios = require('axios')
 const config = require('./config')
 const bearychat = require('bearychat')
@@ -20,12 +22,13 @@ if (process.env.NODE_ENV !== 'production') {
     }));
 }
 var bitcoin = require('bitcoinforksjs-lib')
-var network = bitcoin.networks['testnet']
+var bchaddr = require('bchaddrjs');
 var TransactionBuilder = bitcoin.TransactionBuilder
 var Transaction = bitcoin.Transaction
 
 const bch_network = process.env.BCH_NETWORK || 'testnet';
 const API = process.env.API || 'btc.com';
+var network = bch_network === 'testnet' ? bitcoin.networks['testnet'] : bitcoin.networks['bitcoin']
 
 async function getUTXO(address) {
     const chain = await axios(getURL(address));
@@ -55,6 +58,11 @@ async function broadcastTX(rawhex) {
         const url = config.default.btccom_api_endpoint + 'tools/tx-publish'
         const send = await axios.post(url, { rawhex: rawhex })
         console.log(send.data);
+        if (send.data.err_no === 0) {
+            logger.info('broadcastTX succeed, rawhex:' + rawhex);
+        } else {
+            logger.error('broadcastTX failure, rawhex:' + rawhex);
+        }
     }
 }
 
@@ -119,7 +127,8 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
 
 fastify.post('/api/' + config.default.route_url + '/send', async function(request, reply) {
     const private_key = request.body.private_key.trim() || '';
-    const send_address = request.body.send_address.trim() || '';
+    var toLegacyAddress = bchaddr.toLegacyAddress;
+    const send_address = toLegacyAddress(request.body.send_address.trim()) || '';
     // verify private key
     if (private_key === '') {
         reply.send({ err_no: 1, err_msg: 'error' })
@@ -129,6 +138,10 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
     try {
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
+        if (address === send_address) {
+            reply.send(output(1, 'The address is same'))
+            return
+        }
         if (address !== '' && send_address !== '') {
             const data = await getUTXO(address);
             if (!data) {
@@ -153,10 +166,14 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
                 console.log(tx.getId())
                 console.log(hex)
                 await broadcastTX(hex);
-                // 广播
                 reply.send({ address: address, txhash: txhash, rawhex: hex })
                 sendBearychat((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
             }
+        } else {
+            reply.send({
+                err_no: 1,
+                err_msg: 'address is null'
+            })
         }
     } catch (e) {
         logger.error('gen tx:' + address + ',err:' + e.message);
