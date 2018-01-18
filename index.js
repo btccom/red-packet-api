@@ -1,10 +1,12 @@
 const fastify = require('fastify')({
-    logger: true
-})
-const cors = require('cors')
-fastify.use(cors())
+        logger: true
+    })
+    // const cors = require('cors')
+    // fastify.use(cors())
+fastify.register(require('fastify-accepts'))
 const axios = require('axios')
 const trans = require('./trans')
+const BearychatTransport = require('./transport')
 const config = require('./config')
 const bearychat = require('bearychat')
 const winston = require('winston')
@@ -14,7 +16,8 @@ const logger = winston.createLogger({
     transports: [
         new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
         new winston.transports.File({ filename: 'logs/tx.log', level: 'warn' }),
-        new winston.transports.File({ filename: 'logs/combined.log' })
+        new winston.transports.File({ filename: 'logs/combined.log' }),
+        new BearychatTransport({ token: config.default.bearychat_token, vchannel_id: config.default.bearychat_alert, level: 'error' })
     ]
 });
 
@@ -97,19 +100,13 @@ function output(err_no, err_msg, data) {
     }
 }
 
-function sendBearychat(str) {
-    bearychat.message.create({
-            token: config.default.bearychat_token,
-            vchannel_id: config.default.bearychat_alert,
-            text: str,
-            attachments: {}
-        }).then(resp => resp.json())
-        .then(data => console.log(data));
-}
-
 fastify.post('/api/' + config.default.route_url + '/amount', async function(request, reply) {
     const private_key = request.body.private_key.trim() || '';
-    const lang = 'cn';
+    let lang = 'cn';
+    if (request.languages().length > 0) {
+        const languages = request.languages()[0];
+        lang = (languages === 'en' || languages === 'en-us') ? 'en' : 'cn';
+    }
     // verify private key
     if (private_key === '') {
         reply.send(output(1, trans.getValue(lang, 'errors_private_key_error'), null))
@@ -120,6 +117,7 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
+        logger.error(e);
         reply.send(output(1, trans.getValue(lang, 'errors_private_key_format_error'), null))
         return
     }
@@ -144,7 +142,11 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
     const private_key = request.body.private_key.trim() || '';
     var toLegacyAddress = bchaddr.toLegacyAddress;
     var send_address = '';
-    const lang = 'cn';
+    let lang = 'cn';
+    if (request.languages().length > 0) {
+        const languages = request.languages()[0];
+        lang = (languages === 'en' || languages === 'en-us') ? 'en' : 'cn';
+    }
     try {
         send_address = toLegacyAddress(request.body.send_address.trim()) || '';
     } catch (e) {
@@ -160,6 +162,7 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
+        logger.error(e);
         reply.send(output(1, trans.getValue(lang, 'errors_private_key_format_error'), null))
         return
     }
@@ -189,12 +192,10 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
                 var hex = tx.toHex()
                 var txhash = tx.getId()
                 logger.info('tx:' + txhash + ',rawhex:' + hex)
-                console.log(tx.getId())
-                console.log(hex)
                 await broadcastTX(hex, txhash);
                 logger.warn('address:' + send_address + ',tx:' + txhash + ', hex:' + hex);
                 reply.send(output(0, null, { address: address, txhash: txhash, rawhex: hex }))
-                sendBearychat((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
+                logger.error((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
             }
         } else {
             reply.send(output(1, trans.getValue(lang, 'errors_send_address_null'), null))
