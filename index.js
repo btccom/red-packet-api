@@ -128,24 +128,34 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
 fastify.post('/api/' + config.default.route_url + '/send', async function(request, reply) {
     const private_key = request.body.private_key.trim() || '';
     var toLegacyAddress = bchaddr.toLegacyAddress;
-    const send_address = toLegacyAddress(request.body.send_address.trim()) || '';
+    var send_address = '';
+    try {
+        send_address = toLegacyAddress(request.body.send_address.trim()) || '';
+    } catch (e) {
+        reply.send(output(1, 'bitcoin cash address format error', null))
+    }
     // verify private key
     if (private_key === '') {
-        reply.send({ err_no: 1, err_msg: 'error' })
+        reply.send(output(1, 'error', null))
         return
     }
     var address = '';
     try {
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
+    } catch (e) {
+        reply.send(output(1, 'private-key format err', null))
+        return
+    }
+    try {
         if (address === send_address) {
-            reply.send(output(1, 'The address is same'))
+            reply.send(output(1, 'The address is same', null))
             return
         }
         if (address !== '' && send_address !== '') {
             const data = await getUTXO(address);
             if (!data) {
-                reply.send(output(1, 'The balance is not enough'))
+                reply.send(output(1, 'The balance is not enough', null))
             } else {
                 var vout = 0
                 const fee = 100000
@@ -166,21 +176,15 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
                 console.log(tx.getId())
                 console.log(hex)
                 await broadcastTX(hex);
-                reply.send({ address: address, txhash: txhash, rawhex: hex })
+                reply.send(output(0, null, { address: address, txhash: txhash, rawhex: hex }))
                 sendBearychat((bch_network === 'test_net' ? 'test_net:' : '') + "撒出了" + data.value + "个币，给" + send_address + "，交易哈希是" + txhash)
             }
         } else {
-            reply.send({
-                err_no: 1,
-                err_msg: 'address is null'
-            })
+            reply.send(output(1, 'send address null', null))
         }
     } catch (e) {
         logger.error('gen tx:' + address + ',err:' + e.message);
-        reply.send({
-            err_no: 1,
-            err_msg: 'send error'
-        })
+        reply.send(output(1, 'send err', null))
         return
     }
 })
