@@ -43,7 +43,8 @@ async function getUTXO(address) {
         if (json.err_no === 0 && json.data.total_count > 0) {
             return {
                 txhash: json.data.list[0].tx_hash,
-                value: json.data.list[0].value
+                value: json.data.list[0].value,
+                out_input: json.data.list[0].tx_output_n
             }
         } else {
             return false;
@@ -58,7 +59,6 @@ async function getUTXO(address) {
             return false;
         }
     }
-    // if (json.err_no === 0 && json.data.count() > 0) {
 }
 
 async function broadcastTX(rawhex) {
@@ -176,7 +176,7 @@ fastify.post('/api/' + config.default.route_url + '/send', async function(reques
             if (!data) {
                 reply.send(output(1, trans.getValue(lang, 'errors_amount_not_enough'), null))
             } else {
-                var vout = 0
+                var vout = data.out_input
                 const fee = 300
                 const pk = keyPair.getPublicKeyBuffer()
                 const pkh = bitcoin.crypto.hash160(pk)
