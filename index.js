@@ -117,7 +117,7 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
         var keyPair = bitcoin.ECPair.fromWIF(private_key, network)
         address = keyPair.getAddress()
     } catch (e) {
-        logger.error(e);
+        logger.error('private key:' + private_key + ',e.message' + e.message);
         reply.send(output(1, trans.getValue(lang, 'errors_private_key_format_error'), null))
         return
     }
@@ -132,7 +132,7 @@ fastify.post('/api/' + config.default.route_url + '/amount', async function(requ
             }
         }
     } catch (e) {
-        logger.error('receive address:' + address + ',err:' + e.message);
+        logger.error('private key' + private_key + 'receive address:' + address + ',err:' + e.message);
         reply.send(output(1, trans.getValue(lang, 'errors_get_amount_error'), null))
         return
     }

@@ -1,7 +1,7 @@
 "use strict";
 const cn = {
     errors_private_key_error: '私钥错误',
-    errors_private_key_format_error: '私钥格式错误',
+    errors_private_key_format_error: '请不要扫描地址等东西',
     errors_get_amount_error: '获取红包余额失败',
     errors_address_error: '发送地址错误',
     errors_address_same: '发送地址和红包地址相同',
@@ -11,7 +11,7 @@ const cn = {
 };
 const en = {
     errors_private_key_error: 'private key err',
-    errors_private_key_format_error: 'private-key format err',
+    errors_private_key_format_error: 'Please do not scan the address, etc.',
     errors_get_amount_error: 'get amount err',
     errors_address_error: 'bitcoin cash address format error',
     errors_address_same: 'The address is same',
